@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TierList Maker | Sıralama Oluşturucu</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: #0a0a0f;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .font-orbitron {
+            font-family: 'Orbitron', monospace;
+        }
+
+        .bg-grid {
+            background-image: linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+        }
+
+        @keyframes gridMove {
+            0% {
+                background-position: 0 0;
+            }
+
+            100% {
+                background-position: 50px 50px;
+            }
+        }
+
+        .neon-text {
+            text-shadow: 0 0 5px currentColor, 0 0 10px currentColor, 0 0 20px currentColor;
+        }
+
+        .tier-row {
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tier-row:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .tier-row.drag-over {
+            background: rgba(0, 255, 255, 0.1);
+            border-color: rgba(0, 255, 255, 0.5);
+            box-shadow: inset 0 0 30px rgba(0, 255, 255, 0.1);
+        }
+
+        .tier-row.file-drag-over {
+            background: rgba(255, 0, 255, 0.15);
+            border-color: rgba(255, 0, 255, 0.6);
+            box-shadow: inset 0 0 40px rgba(255, 0, 255, 0.15);
+        }
+
+        .tier-item {
+            transition: all 0.2s ease;
+            cursor: grab;
+        }
+
+        .tier-item:hover {
+            transform: scale(1.05);
+            z-index: 10;
+        }
+
+        .tier-item:active {
+            cursor: grabbing;
+        }
+
+        .tier-item.dragging {
+            opacity: 0.5;
+        }
+
+        .item-pool {
+            background: linear-gradient(135deg, rgba(20, 20, 30, 0.8), rgba(10, 10, 20, 0.9));
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .item-pool.drag-over {
+            border-color: rgba(255, 0, 255, 0.5);
+            box-shadow: inset 0 0 30px rgba(255, 0, 255, 0.1);
+        }
+
+        .cyber-btn {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .cyber-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .cyber-btn:hover::before {
+            left: 100%;
+        }
+
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+
+        input[type="color"]::-webkit-color-swatch {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #00ffff, #ff00ff);
+            border-radius: 4px;
+        }
+
+        .modal-backdrop {
+            backdrop-filter: blur(5px);
+        }
+
+        .upload-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.active {
+            border-color: #00ffff;
+            background: rgba(0, 255, 255, 0.05);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, createContext, useContext } = React;
+
+        // Translations
+        const translations = {
+            tr: {
+                title1: 'TIER',
+                title2: 'LIST',
+                title3: ' MAKER',
+                subtitle: 'Sürükle & Bırak ile Sıralamanı Oluştur',
+                downloadPng: 'PNG İndir',
+                reset: 'Sıfırla',
+                items: 'ÖĞELER',
+                addItem: 'Öğe Ekle',
+                dragHere: 'Öğeleri veya resimleri buraya sürükle',
+                dropFiles: '📁 Resimleri buraya bırak!',
+                dragOrClick: 'PC\'den resimleri buraya sürükle\nveya "Öğe Ekle" butonunu kullan',
+                addNewItem: 'Yeni Öğe Ekle',
+                fromPc: "PC'den Seç",
+                text: 'Metin',
+                url: 'URL',
+                clickOrDrag: 'Tıkla veya Sürükle',
+                supportedFormats: 'PNG, JPG, GIF, WEBP',
+                multiSelect: '✨ Çoklu seçim yapabilirsin!',
+                imagesSelected: 'resim seçildi',
+                removeAll: 'Tümünü Kaldır',
+                addImages: 'Resim Ekle',
+                textPlaceholder: 'Örn: League of Legends',
+                urlPlaceholder: 'https://example.com/image.jpg',
+                preview: 'Önizleme:',
+                add: 'Ekle',
+                addNewTier: 'Yeni Tier Ekle',
+                howToUse: '📖 Nasıl Kullanılır?',
+                tip1Title: "PC'den Resim:",
+                tip1Desc: 'Resimleri doğrudan tier satırlarına veya öğeler alanına sürükle-bırak yap',
+                tip2Title: "Tier'a Ekleme:",
+                tip2Desc: 'Tier etiketinin üzerine gel, + butonuna tıkla',
+                tip3Title: 'Sürükle & Bırak:',
+                tip3Desc: 'Öğeleri tierlar arasında taşı',
+                tip4Title: 'Öğe Ekle Butonu:',
+                tip4Desc: "PC'den seç, metin veya URL ile ekle",
+                tip5Title: 'PNG İndir:',
+                tip5Desc: 'Tier listesini resim olarak kaydet',
+                resetConfirm: 'Tüm tier listesini sıfırlamak istediğinize emin misiniz?',
+                changeColor: 'Renk Değiştir',
+                addImage: 'Resim Ekle',
+                deleteTier: 'Tier Sil'
+            },
+            en: {
+                title1: 'TIER',
+                title2: 'LIST',
+                title3: ' MAKER',
+                subtitle: 'Create Your Ranking with Drag & Drop',
+                downloadPng: 'Download PNG',
+                reset: 'Reset',
+                items: 'ITEMS',
+                addItem: 'Add Item',
+                dragHere: 'Drag items or images here',
+                dropFiles: '📁 Drop images here!',
+                dragOrClick: 'Drag images from PC here\nor use "Add Item" button',
+                addNewItem: 'Add New Item',
+                fromPc: 'From PC',
+                text: 'Text',
+                url: 'URL',
+                clickOrDrag: 'Click or Drag',
+                supportedFormats: 'PNG, JPG, GIF, WEBP',
+                multiSelect: '✨ You can select multiple!',
+                imagesSelected: 'images selected',
+                removeAll: 'Remove All',
+                addImages: 'Add Images',
+                textPlaceholder: 'Ex: League of Legends',
+                urlPlaceholder: 'https://example.com/image.jpg',
+                preview: 'Preview:',
+                add: 'Add',
+                addNewTier: 'Add New Tier',
+                howToUse: '📖 How to Use?',
+                tip1Title: 'From PC:',
+                tip1Desc: 'Drag and drop images directly to tier rows or items area',
+                tip2Title: 'Add to Tier:',
+                tip2Desc: 'Hover over tier label, click + button',
+                tip3Title: 'Drag & Drop:',
+                tip3Desc: 'Move items between tiers',
+                tip4Title: 'Add Item Button:',
+                tip4Desc: 'Select from PC, add text or URL',
+                tip5Title: 'Download PNG:',
+                tip5Desc: 'Save tier list as image',
+                resetConfirm: 'Are you sure you want to reset the entire tier list?',
+                changeColor: 'Change Color',
+                addImage: 'Add Image',
+                deleteTier: 'Delete Tier'
+            }
+        };
+
+        // Language Context
+        const LanguageContext = createContext();
+
+        const useLanguage = () => useContext(LanguageContext);
+
+        const LanguageProvider = ({ children }) => {
+            const [lang, setLang] = useState('tr');
+            const t = translations[lang];
+            return (
+                <LanguageContext.Provider value={{ lang, setLang, t }}>
+                    {children}
+                </LanguageContext.Provider>
+            );
+        };
+
+        // Language Switcher Component
+        const LanguageSwitcher = () => {
+            const { lang, setLang } = useLanguage();
+            return (
+                <div className="flex items-center gap-1 bg-gray-800/80 border border-gray-700 rounded-lg p-1 z-50">
+                    <button
+                        onClick={() => setLang('tr')}
+                        className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all ${lang === 'tr'
+                            ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white'
+                            : 'text-gray-400 hover:text-white'
+                            }`}
+                    >
+                        🇹🇷 TR
+                    </button>
+                    <button
+                        onClick={() => setLang('en')}
+                        className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all ${lang === 'en'
+                            ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white'
+                            : 'text-gray-400 hover:text-white'
+                            }`}
+                    >
+                        🇬🇧 EN
+                    </button>
+                </div>
+            );
+        };
+
+        const defaultTiers = [
+            { id: 's', name: 'S', color: '#ff7f7f', items: [] },
+            { id: 'a', name: 'A', color: '#ffbf7f', items: [] },
+            { id: 'b', name: 'B', color: '#ffdf7f', items: [] },
+            { id: 'c', name: 'C', color: '#ffff7f', items: [] },
+            { id: 'd', name: 'D', color: '#bfff7f', items: [] },
+            { id: 'f', name: 'F', color: '#7fbfff', items: [] },
+        ];
+
+        const fileToBase64 = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+
+        const processFiles = async (files) => {
+            const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+            return Promise.all(imageFiles.map(async (file, idx) => ({
+                id: Date.now().toString() + idx + Math.random().toString(36).substr(2, 9),
+                type: 'image',
+                content: await fileToBase64(file)
+            })));
+        };
+
+        const Header = ({ onExport, onReset }) => {
+            const { t } = useLanguage();
+            return (
+                <header className="relative py-6 px-4">
+                    <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10"></div>
+                    <div className="relative max-w-7xl mx-auto flex flex-col gap-2">
+                        {/* DÜZELTME: Dil seçimi bağımsız bir satır olarak en üste ve sağa alındı */}
+                        <div className="flex justify-end w-full">
+                            <LanguageSwitcher />
+                        </div>
+
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                            <div className="text-center md:text-left">
+                                <h1 className="font-orbitron text-4xl md:text-5xl font-black tracking-wider">
+                                    <span className="text-cyan-400 neon-text">{t.title1}</span>
+                                    <span className="text-white">{t.title2}</span>
+                                    <span className="text-pink-400 neon-text">{t.title3}</span>
+                                </h1>
+                                <p className="text-gray-400 mt-2 text-lg tracking-wide">{t.subtitle}</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button onClick={onExport} className="cyber-btn bg-gradient-to-r from-cyan-500 to-cyan-600 text-white px-6 py-3 rounded-lg font-semibold tracking-wide flex items-center gap-2 hover:from-cyan-400 hover:to-cyan-500">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                    {t.downloadPng}
+                                </button>
+                                <button onClick={onReset} className="cyber-btn bg-gradient-to-r from-pink-500 to-pink-600 text-white px-6 py-3 rounded-lg font-semibold tracking-wide flex items-center gap-2 hover:from-pink-400 hover:to-pink-500">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                    {t.reset}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+            );
+        };
+
+        const TierItem = ({ item, onDragStart, onDragEnd, onDelete }) => (
+            <div
+                draggable
+                onDragStart={(e) => { e.dataTransfer.setData('itemId', item.id); e.dataTransfer.effectAllowed = 'move'; e.target.classList.add('dragging'); onDragStart(item.id); }}
+                onDragEnd={(e) => { e.target.classList.remove('dragging'); onDragEnd(); }}
+                className="tier-item relative group w-20 h-20 rounded-lg overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800 border border-gray-600 flex items-center justify-center"
+            >
+                {item.type === 'image' ? (
+                    <img src={item.content} alt="" className="w-full h-full object-cover" draggable={false} />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center p-2 text-center text-white text-sm font-medium">{item.content}</div>
+                )}
+                <button onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs hover:bg-red-400">×</button>
+            </div>
+        );
+
+        const TierRow = ({ tier, onDrop, onFileDrop, onDragStart, onDragEnd, onDeleteItem, onUpdateTier, onDeleteTier }) => {
+            const { t } = useLanguage();
+            const [isDragOver, setIsDragOver] = useState(false);
+            const [isFileDragOver, setIsFileDragOver] = useState(false);
+            const [isEditing, setIsEditing] = useState(false);
+            const [editName, setEditName] = useState(tier.name);
+            const fileInputRef = useRef(null);
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                if (e.dataTransfer.types.includes('Files')) {
+                    setIsFileDragOver(true); setIsDragOver(false);
+                } else {
+                    setIsDragOver(true); setIsFileDragOver(false);
+                }
+            };
+
+            const handleDragLeave = (e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) {
+                    setIsDragOver(false); setIsFileDragOver(false);
+                }
+            };
+
+            const handleDrop = async (e) => {
+                e.preventDefault();
+                setIsDragOver(false); setIsFileDragOver(false);
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    const newItems = await processFiles(e.dataTransfer.files);
+                    if (newItems.length > 0) onFileDrop(tier.id, newItems);
+                } else {
+                    const itemId = e.dataTransfer.getData('itemId');
+                    if (itemId) onDrop(tier.id, itemId);
+                }
+            };
+
+            const handleFileSelect = async (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    const newItems = await processFiles(e.target.files);
+                    if (newItems.length > 0) onFileDrop(tier.id, newItems);
+                }
+                e.target.value = '';
+            };
+
+            return (
+                <div className={`tier-row flex rounded-lg overflow-hidden ${isDragOver ? 'drag-over' : ''} ${isFileDragOver ? 'file-drag-over' : ''}`}>
+                    <div className="w-24 md:w-32 flex-shrink-0 flex flex-col items-center justify-center p-2 relative group" style={{ backgroundColor: tier.color }}>
+                        {isEditing ? (
+                            <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
+                                onBlur={() => { onUpdateTier(tier.id, { name: editName }); setIsEditing(false); }}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { onUpdateTier(tier.id, { name: editName }); setIsEditing(false); } }}
+                                className="w-full bg-black/30 text-white text-center text-2xl font-bold rounded px-2 py-1 outline-none" autoFocus />
+                        ) : (
+                            <span className="font-orbitron text-2xl md:text-3xl font-black text-white cursor-pointer hover:scale-110 transition-transform"
+                                style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }} onClick={() => setIsEditing(true)}>{tier.name}</span>
+                        )}
+                        <div className="absolute bottom-1 left-1 right-1 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <input type="color" value={tier.color} onChange={(e) => onUpdateTier(tier.id, { color: e.target.value })} className="w-6 h-6 rounded cursor-pointer" title={t.changeColor} />
+                            <button onClick={() => fileInputRef.current?.click()} className="w-6 h-6 bg-cyan-500/80 hover:bg-cyan-500 rounded text-white text-xs flex items-center justify-center" title={t.addImage}>+</button>
+                            <button onClick={() => onDeleteTier(tier.id)} className="w-6 h-6 bg-red-500/80 hover:bg-red-500 rounded text-white text-xs flex items-center justify-center" title={t.deleteTier}>×</button>
+                        </div>
+                        <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" />
+                    </div>
+                    <div className="flex-1 min-h-[88px] bg-gray-900/50 p-2 flex flex-wrap gap-2 items-start content-start"
+                        onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+                        {tier.items.map(item => (
+                            <TierItem key={item.id} item={item} onDragStart={onDragStart} onDragEnd={onDragEnd} onDelete={(itemId) => onDeleteItem(tier.id, itemId)} />
+                        ))}
+                        {tier.items.length === 0 && (
+                            <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm min-h-[72px]">
+                                {isFileDragOver ? <span className="text-pink-400 font-semibold">{t.dropFiles}</span> : t.dragHere}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const ItemPool = ({ items, onDrop, onFileDrop, onDragStart, onDragEnd, onDeleteItem, onAddItem }) => {
+            const { t } = useLanguage();
+            const [isDragOver, setIsDragOver] = useState(false);
+            const [showModal, setShowModal] = useState(false);
+            const [newItemType, setNewItemType] = useState('file');
+            const [newItemText, setNewItemText] = useState('');
+            const [newItemUrl, setNewItemUrl] = useState('');
+            const [previewImages, setPreviewImages] = useState([]);
+            const modalFileInputRef = useRef(null);
+
+            const handleDragOver = (e) => { e.preventDefault(); setIsDragOver(true); };
+            const handleDragLeave = (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsDragOver(false); };
+
+            const handleDrop = async (e) => {
+                e.preventDefault(); setIsDragOver(false);
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    const newItems = await processFiles(e.dataTransfer.files);
+                    onFileDrop(newItems);
+                } else {
+                    const itemId = e.dataTransfer.getData('itemId');
+                    if (itemId) onDrop(itemId);
+                }
+            };
+
+            const handleModalFileSelect = async (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    for (let i = 0; i < e.target.files.length; i++) {
+                        const file = e.target.files[i];
+                        if (file.type.startsWith('image/')) {
+                            const base64 = await fileToBase64(file);
+                            setPreviewImages(prev => [...prev, { id: Date.now().toString() + i, base64, name: file.name }]);
+                        }
+                    }
+                }
+            };
+
+            const handleAddText = () => {
+                if (newItemText.trim()) {
+                    onAddItem({ id: Date.now().toString(), type: 'text', content: newItemText.trim() });
+                    setNewItemText(''); setShowModal(false);
+                }
+            };
+
+            const handleAddUrl = () => {
+                if (newItemUrl.trim()) {
+                    onAddItem({ id: Date.now().toString(), type: 'image', content: newItemUrl.trim() });
+                    setNewItemUrl(''); setShowModal(false);
+                }
+            };
+
+            const handleAddAllImages = () => {
+                previewImages.forEach((img, idx) => onAddItem({ id: Date.now().toString() + idx, type: 'image', content: img.base64 }));
+                setPreviewImages([]); setShowModal(false);
+                if (modalFileInputRef.current) modalFileInputRef.current.value = '';
+            };
+
+            const closeModal = () => {
+                setShowModal(false); setPreviewImages([]); setNewItemText(''); setNewItemUrl('');
+                if (modalFileInputRef.current) modalFileInputRef.current.value = '';
+            };
+
+            return (
+                <div className="mt-8">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="font-orbitron text-xl text-white flex items-center gap-2">
+                            <span className="text-purple-400">◆</span> {t.items} <span className="text-purple-400">◆</span>
+                        </h2>
+                        <button onClick={() => setShowModal(true)} className="cyber-btn bg-gradient-to-r from-purple-500 to-purple-600 text-white px-4 py-2 rounded-lg font-semibold tracking-wide flex items-center gap-2 hover:from-purple-400 hover:to-purple-500">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                            {t.addItem}
+                        </button>
+                    </div>
+
+                    <div className={`item-pool min-h-[120px] rounded-xl p-4 flex flex-wrap gap-2 items-start content-start ${isDragOver ? 'drag-over' : ''}`}
+                        onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+                        {items.map(item => (
+                            <TierItem key={item.id} item={item} onDragStart={onDragStart} onDragEnd={onDragEnd} onDelete={onDeleteItem} />
+                        ))}
+                        {items.length === 0 && (
+                            <div className="w-full flex flex-col items-center justify-center text-gray-500 py-8">
+                                <svg className="w-12 h-12 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <p className="text-center whitespace-pre-line">{t.dragOrClick}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {showModal && (
+                        <div className="fixed inset-0 bg-black/70 modal-backdrop flex items-center justify-center z-50 p-4" onClick={closeModal}>
+                            <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-orbitron text-xl text-white">{t.addNewItem}</h3>
+                                    <button onClick={closeModal} className="text-gray-500 hover:text-white text-2xl">&times;</button>
+                                </div>
+
+                                <div className="flex gap-2 mb-6">
+                                    <button onClick={() => setNewItemType('file')} className={`flex-1 py-3 rounded-lg font-semibold transition-all ${newItemType === 'file' ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+                                        📁 {t.fromPc}
+                                    </button>
+                                    <button onClick={() => setNewItemType('text')} className={`flex-1 py-3 rounded-lg font-semibold transition-all ${newItemType === 'text' ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+                                        📝 {t.text}
+                                    </button>
+                                    <button onClick={() => setNewItemType('url')} className={`flex-1 py-3 rounded-lg font-semibold transition-all ${newItemType === 'url' ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+                                        🔗 {t.url}
+                                    </button>
+                                </div>
+
+                                {newItemType === 'file' && (
+                                    <div>
+                                        <div className="upload-zone rounded-xl p-8 text-center cursor-pointer" onClick={() => modalFileInputRef.current?.click()}>
+                                            <input ref={modalFileInputRef} type="file" accept="image/*" multiple onChange={handleModalFileSelect} className="hidden" />
+                                            <svg className="w-16 h-16 mx-auto mb-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            </svg>
+                                            <p className="text-white text-lg mb-2">{t.clickOrDrag}</p>
+                                            <p className="text-gray-500">{t.supportedFormats}</p>
+                                            <p className="text-cyan-400 mt-2">{t.multiSelect}</p>
+                                        </div>
+                                        {previewImages.length > 0 && (
+                                            <div className="mt-4">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-gray-400">{previewImages.length} {t.imagesSelected}</span>
+                                                    <button onClick={() => setPreviewImages([])} className="text-red-400 hover:text-red-300 text-sm">{t.removeAll}</button>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 p-3 bg-gray-800 rounded-lg max-h-40 overflow-y-auto">
+                                                    {previewImages.map(img => (
+                                                        <div key={img.id} className="relative group">
+                                                            <img src={img.base64} alt="" className="w-14 h-14 object-cover rounded" />
+                                                            <button onClick={() => setPreviewImages(prev => prev.filter(p => p.id !== img.id))}
+                                                                className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs opacity-0 group-hover:opacity-100">×</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <button onClick={handleAddAllImages} className="w-full mt-4 py-3 rounded-lg font-semibold bg-gradient-to-r from-cyan-500 to-purple-500 text-white hover:from-cyan-400 hover:to-purple-400">
+                                                    {previewImages.length} {t.addImages}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {newItemType === 'text' && (
+                                    <div>
+                                        <input type="text" value={newItemText} onChange={(e) => setNewItemText(e.target.value)} placeholder={t.textPlaceholder}
+                                            className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-cyan-500 focus:outline-none mb-4"
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddText()} autoFocus />
+                                        <button onClick={handleAddText} disabled={!newItemText.trim()}
+                                            className={`w-full py-3 rounded-lg font-semibold transition-all ${newItemText.trim() ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white hover:from-cyan-400 hover:to-purple-400' : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}>
+                                            {t.add}
+                                        </button>
+                                    </div>
+                                )}
+
+                                {newItemType === 'url' && (
+                                    <div>
+                                        <input type="text" value={newItemUrl} onChange={(e) => setNewItemUrl(e.target.value)} placeholder={t.urlPlaceholder}
+                                            className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-cyan-500 focus:outline-none mb-4"
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddUrl()} autoFocus />
+                                        {newItemUrl && (
+                                            <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+                                                <p className="text-gray-500 text-sm mb-2">{t.preview}</p>
+                                                <img src={newItemUrl} alt="Preview" className="w-20 h-20 object-cover rounded-lg" onError={(e) => e.target.style.display = 'none'} />
+                                            </div>
+                                        )}
+                                        <button onClick={handleAddUrl} disabled={!newItemUrl.trim()}
+                                            className={`w-full py-3 rounded-lg font-semibold transition-all ${newItemUrl.trim() ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white hover:from-cyan-400 hover:to-purple-400' : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}>
+                                            {t.add}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const AddTierButton = ({ onAdd }) => {
+            const { t } = useLanguage();
+            const colors = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#1dd1a1'];
+            return (
+                <button onClick={() => onAdd({ id: Date.now().toString(), name: '?', color: colors[Math.floor(Math.random() * colors.length)], items: [] })}
+                    className="w-full py-3 border-2 border-dashed border-gray-700 rounded-lg text-gray-500 hover:border-cyan-500 hover:text-cyan-500 transition-colors flex items-center justify-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    {t.addNewTier}
+                </button>
+            );
+        };
+
+        const App = () => {
+            const { t } = useLanguage();
+            const [tiers, setTiers] = useState(defaultTiers);
+            const [poolItems, setPoolItems] = useState([]);
+            const [draggingItemId, setDraggingItemId] = useState(null);
+            const tierListRef = useRef(null);
+
+            const findItem = (itemId) => {
+                for (const tier of tiers) {
+                    const item = tier.items.find(i => i.id === itemId);
+                    if (item) return { item, source: 'tier', tierId: tier.id };
+                }
+                const poolItem = poolItems.find(i => i.id === itemId);
+                if (poolItem) return { item: poolItem, source: 'pool' };
+                return null;
+            };
+
+            const removeItemFromSource = (itemId) => {
+                let removedItem = null;
+                setTiers(prev => prev.map(tier => {
+                    const item = tier.items.find(i => i.id === itemId);
+                    if (item) { removedItem = item; return { ...tier, items: tier.items.filter(i => i.id !== itemId) }; }
+                    return tier;
+                }));
+                if (!removedItem) {
+                    const item = poolItems.find(i => i.id === itemId);
+                    if (item) { removedItem = item; setPoolItems(prev => prev.filter(i => i.id !== itemId)); }
+                }
+                return removedItem;
+            };
+
+            const handleDropOnTier = (tierId, itemId) => {
+                const item = removeItemFromSource(itemId);
+                if (item) setTiers(prev => prev.map(tier => tier.id === tierId ? { ...tier, items: [...tier.items, item] } : tier));
+            };
+
+            const handleFileDropOnTier = (tierId, newItems) => {
+                setTiers(prev => prev.map(tier => tier.id === tierId ? { ...tier, items: [...tier.items, ...newItems] } : tier));
+            };
+
+            const handleDropOnPool = (itemId) => {
+                const itemData = findItem(itemId);
+                if (!itemData || itemData.source === 'pool') return;
+                const item = removeItemFromSource(itemId);
+                if (item) setPoolItems(prev => [...prev, item]);
+            };
+
+            const handleFileDropOnPool = (newItems) => setPoolItems(prev => [...prev, ...newItems]);
+
+            const handleDeleteFromTier = (tierId, itemId) => {
+                setTiers(prev => prev.map(tier => tier.id === tierId ? { ...tier, items: tier.items.filter(i => i.id !== itemId) } : tier));
+            };
+
+            const handleDeleteFromPool = (itemId) => setPoolItems(prev => prev.filter(i => i.id !== itemId));
+
+            const handleAddItem = (item) => setPoolItems(prev => [...prev, item]);
+
+            const handleUpdateTier = (tierId, updates) => setTiers(prev => prev.map(tier => tier.id === tierId ? { ...tier, ...updates } : tier));
+
+            const handleDeleteTier = (tierId) => {
+                const tier = tiers.find(t => t.id === tierId);
+                if (tier?.items.length > 0) setPoolItems(prev => [...prev, ...tier.items]);
+                setTiers(prev => prev.filter(t => t.id !== tierId));
+            };
+
+            const handleExport = async () => {
+                if (!tierListRef.current) return;
+                try {
+                    const canvas = await html2canvas(tierListRef.current, { backgroundColor: '#0a0a0f', scale: 2, useCORS: true });
+                    const link = document.createElement('a');
+                    link.download = 'tierlist.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                } catch (err) { console.error('Export failed:', err); }
+            };
+
+            const handleReset = () => {
+                if (confirm(t.resetConfirm)) {
+                    setTiers(defaultTiers); setPoolItems([]);
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-grid">
+                    <div className="fixed top-0 left-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="fixed bottom-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                    <Header onExport={handleExport} onReset={handleReset} />
+
+                    <main className="max-w-7xl mx-auto px-4 pb-12">
+                        <div ref={tierListRef} className="space-y-2 p-4 rounded-2xl bg-gray-900/30">
+                            {tiers.map(tier => (
+                                <TierRow key={tier.id} tier={tier} onDrop={handleDropOnTier} onFileDrop={handleFileDropOnTier}
+                                    onDragStart={setDraggingItemId} onDragEnd={() => setDraggingItemId(null)}
+                                    onDeleteItem={handleDeleteFromTier} onUpdateTier={handleUpdateTier} onDeleteTier={handleDeleteTier} />
+                            ))}
+                            <AddTierButton onAdd={(tier) => setTiers(prev => [...prev, tier])} />
+                        </div>
+
+                        <ItemPool items={poolItems} onDrop={handleDropOnPool} onFileDrop={handleFileDropOnPool}
+                            onDragStart={setDraggingItemId} onDragEnd={() => setDraggingItemId(null)}
+                            onDeleteItem={handleDeleteFromPool} onAddItem={handleAddItem} />
+
+                        <div className="mt-8 p-6 rounded-xl bg-gray-900/30 border border-gray-800">
+                            <h3 className="font-orbitron text-lg text-cyan-400 mb-4">{t.howToUse}</h3>
+                            <ul className="text-gray-400 space-y-2">
+                                <li className="flex items-start gap-2"><span className="text-pink-400">▸</span><span><strong className="text-white">{t.tip1Title}</strong> {t.tip1Desc}</span></li>
+                                <li className="flex items-start gap-2"><span className="text-pink-400">▸</span><span><strong className="text-white">{t.tip2Title}</strong> {t.tip2Desc}</span></li>
+                                <li className="flex items-start gap-2"><span className="text-pink-400">▸</span><span><strong className="text-white">{t.tip3Title}</strong> {t.tip3Desc}</span></li>
+                                <li className="flex items-start gap-2"><span className="text-pink-400">▸</span><span><strong className="text-white">{t.tip4Title}</strong> {t.tip4Desc}</span></li>
+                                <li className="flex items-start gap-2"><span className="text-pink-400">▸</span><span><strong className="text-white">{t.tip5Title}</strong> {t.tip5Desc}</span></li>
+                            </ul>
+                        </div>
+                    </main>
+
+                    <footer className="py-6 text-center text-gray-600 border-t border-gray-800/50">
+                        <p className="font-orbitron text-sm">TIER<span className="text-cyan-400">LIST</span> MAKER</p>
+                    </footer>
+                </div>
+            );
+        };
+
+        // Wrap App with LanguageProvider
+        const AppWithLanguage = () => (
+            <LanguageProvider>
+                <App />
+            </LanguageProvider>
+        );
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<AppWithLanguage />);
+    </script>
+</body>
+
+</html>
