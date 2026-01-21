@@ -177,7 +177,6 @@
     <script type="text/babel">
         const { useState, useRef, createContext, useContext } = React;
 
-        // Translations
         const translations = {
             tr: {
                 title1: 'TIER',
@@ -267,7 +266,6 @@
             }
         };
 
-        // Language Context
         const LanguageContext = createContext();
 
         const useLanguage = () => useContext(LanguageContext);
@@ -282,7 +280,6 @@
             );
         };
 
-        // Language Switcher Component
         const LanguageSwitcher = () => {
             const { lang, setLang } = useLanguage();
             return (
